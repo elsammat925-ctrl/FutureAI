@@ -1,0 +1,20 @@
+
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+# Local data and generated files
+__pycache__/
+data/
+output/
+voices/
+
+# Backup and test copies
+*_backup*.py
+*backup*.py
+web_app_before_malayalam.py
+web_app_broken_copy.py
+wake_test.py
