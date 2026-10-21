@@ -27,6 +27,11 @@ SUPABASE_PUBLISHABLE_KEY = os.environ.get(
 AI_NAME = "A.M."
 CREATOR_NAME = "Aabel Mathew"
 
+INTRO_MESSAGE = (
+    "Hello! I am A.M., the AI assistant inside Future AI, "
+    "created by Aabel Mathew."
+)
+
 SYSTEM_PROMPT = f"""
 You are {AI_NAME}, the AI assistant inside Future AI.
 Your name is A.M.
@@ -240,29 +245,68 @@ def ask_ollama(message):
 # --------------------------------------------------
 # IDENTITY QUESTIONS
 # --------------------------------------------------
-
 def get_identity_reply(message):
     text = message.lower().strip()
     text = (
         text.replace("’", "'")
         .replace("a. m.", "a.m.")
         .replace("a m", "a.m.")
+        .rstrip(" .!?")
     )
 
+    # Repeat the exact first greeting when specifically requested.
+    repeat_phrases = (
+        "repeat your first message",
+        "repeat the first message",
+        "repeat what you said at the beginning",
+        "repeat what you said in the beginning",
+        "repeat your introduction",
+        "say your introduction again",
+        "say your first message again",
+        "repeat your greeting",
+        "say your greeting again",
+        "what was your first message",
+        "what did you say at the beginning"
+    )
+
+    if any(phrase in text for phrase in repeat_phrases):
+        return INTRO_MESSAGE
+
+    # Short, direct answers to identity questions.
     name_questions = {
-        "what is your name", "what's your name",
-        "what is ur name", "whats your name",
-        "tell me your name", "your name", "who are you",
-        "what should i call you", "are you a.m.",
-        "are you am", "are you zapp"
+        "what is your name",
+        "what's your name",
+        "whats your name",
+        "what is ur name",
+        "tell me your name",
+        "your name",
+        "what should i call you",
+        "are you a.m.",
+        "are you am",
+        "are you zapp",
+        "who are you"
     }
 
     creator_questions = {
-        "who created you", "who made you",
-        "who is your creator", "who developed you",
-        "who built you", "who is your developer",
-        "who is your creator?", "who is your owner",
-        "who owns you", "who is behind future ai"
+        "who created you",
+        "who made you",
+        "who is your creator",
+        "who developed you",
+        "who built you",
+        "who is your developer",
+        "who is your owner",
+        "who owns you",
+        "who is behind future ai"
+    }
+
+    app_questions = {
+        "what app are you in",
+        "which app are you in",
+        "what app is this",
+        "which app is this",
+        "what is future ai",
+        "what platform are you on",
+        "what app do you belong to"
     }
 
     creator_statements = {
@@ -271,35 +315,32 @@ def get_identity_reply(message):
         "you are made by aabel mathew",
         "you were made by aabel mathew",
         "aabel mathew created you",
-        "aabel mathew made you",
-        "you are created by aabel mathew.",
-        "you are created by aabel mathew!"
+        "aabel mathew made you"
     }
 
     name_statements = {
-        "your name is a.m.", "your name is a.m",
-        "your name is am", "you are a.m.",
-        "you are a.m", "you are am",
-        "you are am.", "your name is a.m.!"
+        "your name is a.m.",
+        "your name is a.m",
+        "your name is am",
+        "you are a.m.",
+        "you are a.m",
+        "you are am"
     }
 
     if text in name_questions:
-        return (
-            "My name is A.M. I am the AI assistant inside "
-            "Future AI, created by Aabel Mathew."
-        )
+        return "My name is A.M."
 
     if text in creator_questions:
         return "I was created by Aabel Mathew."
+
+    if text in app_questions:
+        return "I am the AI assistant inside Future AI."
 
     if text in creator_statements:
         return "Yes, I was created by Aabel Mathew."
 
     if text in name_statements:
-        return (
-            "Yes! My name is A.M. I am the AI assistant inside "
-            "Future AI, created by Aabel Mathew."
-        )
+        return "Yes! My name is A.M."
 
     return None
 # --------------------------------------------------
@@ -1086,7 +1127,9 @@ const saveModal = $("saveModal");
 
 const STORAGE_KEY = "am_future_ai_conversations_v1";
 const VOICE_KEY = "am_future_ai_selected_voice_v1";
-
+const INTRO_MESSAGE =
+    "Hello! I am A.M., the AI assistant inside Future AI, created by Aabel Mathew.";
+    
 let currentSession = null;
 let conversations = [];
 let activeConversationId = null;
@@ -1314,7 +1357,7 @@ async function loadAccountConversations(session) {
             return;
         }
 
-        conversations = (data || []).map(row => ({
+        const cloudConversations = (data || []).map(row => ({
             id: row.conversation_id,
             title: row.title || "New chat",
             messages: Array.isArray(row.messages) ? row.messages : [],
@@ -1323,36 +1366,50 @@ async function loadAccountConversations(session) {
                 : Date.now()
         }));
 
+        // Keep local chats if the cloud has no saved conversations.
+        const localConversations = loadLocalConversations(userId);
+
+        if (cloudConversations.length > 0) {
+            conversations = cloudConversations;
+        } else {
+            conversations = localConversations;
+        }
+
         activeConversationId = conversations.length
             ? conversations[0].id
             : null;
 
         loadedAccountUserId = userId;
         saveLocalConversations(userId);
-        renderChat();
-        renderHistory();
 
-    } catch (error) {
-        console.error("Could not load cloud chat history:", error.message);
+        // Create and speak the introduction only if this account
+        // has no saved conversations in either location.
+        if (conversations.length === 0) {
+            const conversation = {
+                id: makeId(),
+                title: "New chat",
+                messages: [{
+                    role: "ai",
+                    text: INTRO_MESSAGE,
+                    time: Date.now()
+                }],
+                updatedAt: Date.now()
+            };
 
-        if (
-            sequence === accountLoadSequence &&
-            currentSession?.user?.id === userId
-        ) {
-            conversations = loadLocalConversations(userId);
-            activeConversationId = conversations.length
-                ? conversations[0].id
-                : null;
+            conversations.unshift(conversation);
+            activeConversationId = conversation.id;
+
+            saveLocalConversations(userId);
+            queueCloudSave(conversation);
 
             renderChat();
             renderHistory();
-
-            alert(
-                "Could not load cloud chat history. " +
-                "Showing this account's local cache for now. " +
-                "Please check your connection and reload."
-            );
+            speakReply(INTRO_MESSAGE);
+            return;
         }
+                renderChat();
+        renderHistory();
+
     } finally {
         if (loadingAccountUserId === userId) {
             loadingAccountUserId = null;
@@ -1574,7 +1631,7 @@ function persistConversations() {
 }
 
 function newConversation() {
-    if (!currentSession?.user?.id) {
+if (!currentSession?.user?.id) {
         showAuthScreen("Please sign in to create a chat.");
         return;
     }
@@ -1582,19 +1639,25 @@ function newConversation() {
     const conversation = {
         id: makeId(),
         title: "New chat",
-        messages: [],
+        messages: [{
+            role: "ai",
+            text: INTRO_MESSAGE,
+            time: Date.now()
+        }],
         updatedAt: Date.now()
     };
+
 
     conversations.unshift(conversation);
     activeConversationId = conversation.id;
 
     persistConversations();
-    renderChat();
+        renderChat();
     renderHistory();
     closeChatHistory();
     chatScreen.classList.add("active");
     voiceScreen.classList.remove("active");
+    speakReply(INTRO_MESSAGE);
     messageInput.focus();
 }
 
