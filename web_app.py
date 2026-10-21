@@ -17,7 +17,15 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "").strip()
 TAVILY_SEARCH_URL = "https://api.tavily.com/search"
+CLOUDFLARE_API_TOKEN = os.environ.get(
+    "CLOUDFLARE_API_TOKEN", ""
+).strip()
 
+CLOUDFLARE_ACCOUNT_ID = os.environ.get(
+    "CLOUDFLARE_ACCOUNT_ID", ""
+).strip()
+
+CLOUDFLARE_IMAGE_MODEL = "@cf/black-forest-labs/flux-2-klein-4b"
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_PUBLISHABLE_KEY = os.environ.get(
@@ -1032,6 +1040,34 @@ button:disabled { opacity: .5; cursor: wait; }
                 <button class="action-button primary" id="startVoiceButton">🎙 Speak to A.M.</button>
                 <button class="action-button" id="newChatShortcut">＋ New chat</button>
             </div>
+            
+<div id="imageTools" style="margin: 12px 0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+    <button type="button" class="action-button" id="createImageButton">
+        🎨 Create image
+    </button>
+
+    <button type="button" class="action-button" id="editImageButton">
+        🖼️ Edit image
+    </button>
+
+    <input
+        type="file"
+        id="imageUpload"
+        accept="image/jpeg,image/png,image/webp"
+        hidden
+    >
+
+    <input
+        type="text"
+        id="imagePrompt"
+        placeholder="Describe the image you want..."
+        maxlength="1800"
+        style="flex: 1; min-width: 180px; padding: 12px; border: 1px solid #ccc; border-radius: 10px;"
+    >
+</div>
+
+<div id="imageResult" style="margin: 12px 0;"></div>
+
 
             <form class="composer" id="chatForm">
                 <input id="messageInput" placeholder="Message A.M...." autocomplete="off" required>
@@ -2616,6 +2652,125 @@ def chat():
             flush=True
         )
 
+# --------------------------------------------------
+# IMAGE GENERATION AND EDITING — LOGIN REQUIRED
+# --------------------------------------------------
+@app.route("/generate-image", methods=["POST"])
+def generate_image():
+    user, auth_error = get_authenticated_user()
+
+    if auth_error:
+        return jsonify({"error": "Please sign in to use image generation."}), 401
+
+    if not CLOUDFLARE_API_TOKEN or not CLOUDFLARE_ACCOUNT_ID:
+        return jsonify({
+            "error": "Image generation is not configured on the server."
+        }), 503
+
+    prompt = str(request.form.get("prompt", "")).strip()
+
+    if not prompt:
+        return jsonify({"error": "Please describe the image you want."}), 400
+
+    if len(prompt) > 1800:
+        return jsonify({
+            "error": "Please keep your image description under 1800 characters."
+        }), 400
+
+    upload = request.files.get("image")
+
+    form_data = {
+        "prompt": prompt,
+        "width": "1024",
+        "height": "1024",
+    }
+
+    files = {
+        key: (None, value)
+        for key, value in form_data.items()
+    }
+
+    if upload and upload.filename:
+        allowed_types = {
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+        }
+
+        if upload.mimetype not in allowed_types:
+            return jsonify({
+                "error": "Please upload a JPG, PNG, or WebP image."
+            }), 400
+
+        image_bytes = upload.read(5 * 1024 * 1024 + 1)
+
+        if len(image_bytes) > 5 * 1024 * 1024:
+            return jsonify({
+                "error": "The uploaded image must be 5 MB or smaller."
+            }), 400
+
+        if not image_bytes:
+            return jsonify({"error": "The uploaded image is empty."}), 400
+
+        files["input_image_0"] = (
+            upload.filename,
+            image_bytes,
+            upload.mimetype,
+        )
+
+    api_url = (
+        "https://api.cloudflare.com/client/v4/accounts/"
+        f"{CLOUDFLARE_ACCOUNT_ID}/ai/run/{CLOUDFLARE_IMAGE_MODEL}"
+    )
+
+    try:
+        response = requests.post(
+            api_url,
+            headers={
+                "Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}"
+            },
+            files=files,
+            timeout=120,
+        )
+
+        try:
+            result_data = response.json()
+        except ValueError:
+            result_data = {}
+
+        if not response.ok:
+            app.logger.warning(
+                "Cloudflare image request failed with HTTP %s.",
+                response.status_code,
+            )
+            return jsonify({
+                "error": "Cloudflare could not generate the image. "
+                         "Please try again later."
+            }), 502
+
+        image_base64 = result_data.get("result", {}).get("image")
+
+        if not image_base64:
+            app.logger.warning("Cloudflare returned no image data.")
+            return jsonify({
+                "error": "No image was returned. Please try again."
+            }), 502
+
+        return jsonify({
+            "image": "data:image/jpeg;base64," + image_base64,
+            "mode": "edit" if upload and upload.filename else "generate",
+        })
+
+    except requests.Timeout:
+        return jsonify({
+            "error": "Image generation took too long. Please try again."
+        }), 504
+
+    except requests.RequestException:
+        app.logger.exception("Cloudflare image request failed.")
+        return jsonify({
+            "error": "Unable to contact the image service right now."
+        }), 502
 
 # --------------------------------------------------
 # HEALTH CHECK
