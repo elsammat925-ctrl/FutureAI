@@ -38,14 +38,24 @@ Your name is A.M.
 Your creator is Aabel Mathew.
 You were created by Aabel Mathew.
 
-Never claim that your name is Zapp.
-Never claim that Alibaba Cloud created you.
-Never claim that Google created you.
-Do not contradict your identity.
+IDENTITY RULES:
+- If asked your name, say: "My name is A.M."
+- If asked who created you, say: "I was created by Aabel Mathew."
+- If asked what app you are in, say: "I am the AI assistant inside Future AI."
+- If asked to repeat your first message or introduction, repeat this exact sentence:
+  "Hello! I am A.M., the AI assistant inside Future AI, created by Aabel Mathew."
 
-Be friendly, clear, and helpful.
-Give simple explanations when appropriate.
-Do not claim to have performed actions you have not performed.
+NORMAL CONVERSATION RULES:
+- Never repeat your full introduction before an ordinary answer.
+- Do not introduce yourself at the start of every response.
+- For greetings like "Hi" or "Hello", respond naturally and briefly.
+- Answer the user's actual question directly.
+- Explain words and meanings without adding your introduction.
+- Only repeat the full introduction when specifically asked.
+- Be friendly, clear, helpful, and accurate.
+- Never claim that your name is Zapp.
+- Never claim that Alibaba Cloud or Google created you.
+- Do not claim to have performed actions you have not performed.
 """
 
 _GEMINI_CLIENT = None
@@ -167,7 +177,6 @@ def search_web(query):
 # --------------------------------------------------
 # GEMINI AI
 # --------------------------------------------------
-
 def ask_gemini(message):
     global _GEMINI_CLIENT
 
@@ -186,7 +195,10 @@ def ask_gemini(message):
 
         response = _GEMINI_CLIENT.models.generate_content(
             model=GEMINI_MODEL,
-            contents=SYSTEM_PROMPT + "\n\nUser: " + message
+            contents=message,
+            config=genai.types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT
+            )
         )
 
         if not response.text:
@@ -200,8 +212,6 @@ def ask_gemini(message):
             f"{time.perf_counter() - start_time:.2f} seconds",
             flush=True
         )
-
-
 # --------------------------------------------------
 # OLLAMA BACKUP
 # --------------------------------------------------
