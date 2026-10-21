@@ -1,3 +1,4 @@
+
 from flask import Flask, request, jsonify, render_template_string
 import os
 import json
@@ -26,7 +27,6 @@ CREATOR_NAME = "Aabel Mathew"
 
 SYSTEM_PROMPT = f"""
 You are {AI_NAME}, the AI assistant inside Future AI.
-
 Your name is A.M.
 Your creator is Aabel Mathew.
 You were created by Aabel Mathew.
@@ -53,8 +53,7 @@ def get_authenticated_user():
 
     if not SUPABASE_URL or not SUPABASE_PUBLISHABLE_KEY:
         return None, (
-            "Authentication is not configured on the server.",
-            503
+            "Authentication is not configured on the server.", 503
         )
 
     auth_header = request.headers.get("Authorization", "")
@@ -79,23 +78,18 @@ def get_authenticated_user():
     except requests.RequestException:
         app.logger.exception("Could not verify Supabase session")
         return None, (
-            "Could not verify your session. Please try again.",
-            503
+            "Could not verify your session. Please try again.", 503
         )
 
     if response.status_code != 200:
         return None, (
-            "Your session has expired. Please sign in again.",
-            401
+            "Your session has expired. Please sign in again.", 401
         )
 
     try:
         user = response.json()
     except ValueError:
-        return None, (
-            "Could not verify your session. Please sign in again.",
-            401
-        )
+        return None, ("Could not verify your session.", 401)
 
     if not isinstance(user, dict) or not user.get("id"):
         return None, ("Could not verify your session.", 401)
@@ -154,14 +148,8 @@ def ask_ollama(message):
             json={
                 "model": MODEL,
                 "messages": [
-                    {
-                        "role": "system",
-                        "content": SYSTEM_PROMPT
-                    },
-                    {
-                        "role": "user",
-                        "content": message
-                    }
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": message}
                 ],
                 "stream": False
             },
@@ -290,7 +278,7 @@ def get_ai_reply(message):
 
 
 # --------------------------------------------------
-# COMPLETE MOBILE INTERFACE
+# MOBILE INTERFACE
 # --------------------------------------------------
 
 PAGE = r"""
@@ -637,8 +625,15 @@ button:disabled { opacity: .5; cursor: wait; }
 .voice-orb.listening { animation: breathe 2.5s ease-in-out infinite; }
 .voice-orb.speaking { animation: speak-pulse 1s ease-in-out infinite; }
 
-@keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
-@keyframes speak-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.065); } }
+@keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.035); }
+}
+
+@keyframes speak-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.065); }
+}
 
 .voice-status {
     position: absolute;
@@ -674,8 +669,22 @@ button:disabled { opacity: .5; cursor: wait; }
     background: white;
 }
 
-.voice-input input { width: 100%; min-width: 0; padding: 10px 0; border: 0; outline: none; background: transparent; font-size: 16px; }
-.voice-input button { flex-shrink: 0; border: 0; background: transparent; font-size: 25px; }
+.voice-input input {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    font-size: 16px;
+}
+
+.voice-input button {
+    flex-shrink: 0;
+    border: 0;
+    background: transparent;
+    font-size: 25px;
+}
 
 .mic-toggle, .exit-button {
     width: 60px;
@@ -706,8 +715,14 @@ button:disabled { opacity: .5; cursor: wait; }
 
 .panel.open { transform: translateX(0); }
 .panel h2 { margin-top: 12px; }
-.panel button, .panel select { max-width: 100%; }
-.panel select { width: 100%; margin: 10px 0 18px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: white; }
+.panel select {
+    width: 100%;
+    margin: 10px 0 18px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: white;
+}
 
 .modal-backdrop {
     position: fixed;
@@ -721,11 +736,28 @@ button:disabled { opacity: .5; cursor: wait; }
 }
 
 .modal-backdrop.open { display: flex; }
-.modal { width: 100%; max-width: 390px; padding: 24px; border-radius: 22px; background: white; box-shadow: 0 12px 45px #00000022; }
+
+.modal {
+    width: 100%;
+    max-width: 390px;
+    padding: 24px;
+    border-radius: 22px;
+    background: white;
+    box-shadow: 0 12px 45px #00000022;
+}
+
 .modal h2 { margin-top: 0; }
 .modal p { color: #555; line-height: 1.5; }
 .modal-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 22px; }
-.modal-actions button { flex: 1; min-width: 115px; padding: 12px; border: 0; border-radius: 12px; }
+
+.modal-actions button {
+    flex: 1;
+    min-width: 115px;
+    padding: 12px;
+    border: 0;
+    border-radius: 12px;
+}
+
 .save-button { background: #171717; color: white; }
 .cancel-button { background: #ededf0; color: #171717; }
 
@@ -742,8 +774,6 @@ button:disabled { opacity: .5; cursor: wait; }
 </head>
 
 <body>
-
-<!-- SIGN IN / CREATE ACCOUNT -->
 
 <section id="authScreen" class="screen active">
     <div class="auth-card">
@@ -773,8 +803,6 @@ button:disabled { opacity: .5; cursor: wait; }
     </div>
 </section>
 
-<!-- NORMAL CHAT SCREEN -->
-
 <section id="chatScreen" class="screen">
     <div class="topbar">
         <button class="icon-button" id="menuButton" aria-label="Open chat history">☰</button>
@@ -792,6 +820,7 @@ button:disabled { opacity: .5; cursor: wait; }
 
         <main class="chat-main">
             <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
+
             <div class="main-actions">
                 <button class="action-button primary" id="startVoiceButton">🎙 Speak to A.M.</button>
                 <button class="action-button" id="newChatShortcut">＋ New chat</button>
@@ -804,8 +833,6 @@ button:disabled { opacity: .5; cursor: wait; }
         </main>
     </div>
 </section>
-
-<!-- FULL-SCREEN VOICE CHAT -->
 
 <section id="voiceScreen" class="screen">
     <div class="voice-topbar">
@@ -829,8 +856,6 @@ button:disabled { opacity: .5; cursor: wait; }
     </div>
 </section>
 
-<!-- SETTINGS PANEL -->
-
 <aside class="panel" id="settingsPanel">
     <button class="icon-button" id="closeSettingsButton" aria-label="Close settings">×</button>
 
@@ -851,8 +876,6 @@ button:disabled { opacity: .5; cursor: wait; }
     <p class="subtle" id="signedInEmail"></p>
     <button class="action-button" id="logoutButton">Sign out</button>
 </aside>
-
-<!-- EXIT CONFIRMATION -->
 
 <div class="modal-backdrop" id="saveModal">
     <div class="modal">
@@ -885,8 +908,6 @@ const authForm = $("authForm");
 const authEmail = $("authEmail");
 const authPassword = $("authPassword");
 const authMessage = $("authMessage");
-const authHeading = $("authHeading");
-const authDescription = $("authDescription");
 const loginButton = $("loginButton");
 const signupButton = $("signupButton");
 const signedInEmail = $("signedInEmail");
@@ -909,7 +930,7 @@ const STORAGE_KEY = "am_future_ai_conversations_v1";
 const VOICE_KEY = "am_future_ai_selected_voice_v1";
 
 let currentSession = null;
-let conversations = loadConversations();
+let conversations = [];
 let activeConversationId = null;
 let voiceDraft = [];
 let voiceActive = false;
@@ -923,6 +944,221 @@ let recognitionSupported = false;
 let voiceExitPending = false;
 let nextRecognitionTimer = null;
 
+let loadedAccountUserId = null;
+let loadingAccountUserId = null;
+let accountLoadSequence = 0;
+const cloudSaveQueues = new Map();
+
+
+// --------------------------------------------------
+// ACCOUNT-SCOPED LOCAL CACHE
+// --------------------------------------------------
+
+function makeId() {
+    return Date.now().toString(36) +
+        Math.random().toString(36).slice(2, 9);
+}
+
+function getStorageKey(userId) {
+    return STORAGE_KEY + "_" + userId;
+}
+
+function loadLocalConversations(userId) {
+    if (!userId) return [];
+
+    try {
+        const saved = JSON.parse(
+            localStorage.getItem(getStorageKey(userId)) || "[]"
+        );
+
+        return Array.isArray(saved) ? saved : [];
+    } catch (error) {
+        console.error("Could not read local chat cache:", error);
+        return [];
+    }
+}
+
+function saveLocalConversations(userId) {
+    if (!userId) return;
+
+    try {
+        localStorage.setItem(
+            getStorageKey(userId),
+            JSON.stringify(conversations)
+        );
+    } catch (error) {
+        console.error("Could not save local chat cache:", error);
+    }
+}
+
+
+// --------------------------------------------------
+// CLOUD CHAT HISTORY
+// --------------------------------------------------
+
+async function getCurrentCloudSession() {
+    if (!supabaseClient) {
+        throw new Error("Supabase is not configured.");
+    }
+
+    const { data, error } = await supabaseClient.auth.getSession();
+
+    if (error) throw error;
+
+    const session = data?.session;
+
+    if (!session?.user?.id || !session?.access_token) {
+        throw new Error("Please sign in to save your chats.");
+    }
+
+    return session;
+}
+
+async function saveConversationToCloud(conversation, userId) {
+    if (!conversation || !conversation.id || !userId) return;
+
+    const session = await getCurrentCloudSession();
+
+    // Do not write one account's data using another account's session.
+    if (session.user.id !== userId) {
+        throw new Error("Account changed before the chat could be saved.");
+    }
+
+    const record = {
+        user_id: userId,
+        conversation_id: conversation.id,
+        title: conversation.title || "New chat",
+        messages: Array.isArray(conversation.messages)
+            ? conversation.messages
+            : [],
+        updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabaseClient
+        .from("chat_history")
+        .upsert(record, {
+            onConflict: "user_id,conversation_id"
+        });
+
+    if (error) throw error;
+}
+
+function queueCloudSave(conversation) {
+    const userId = currentSession?.user?.id;
+
+    if (!userId || !conversation?.id) return;
+
+    // Capture the current version so later edits cannot mutate this save.
+    const snapshot = JSON.parse(JSON.stringify(conversation));
+    const queueKey = userId + ":" + snapshot.id;
+
+    const previous = cloudSaveQueues.get(queueKey) || Promise.resolve();
+
+    const next = previous
+        .catch(() => {})
+        .then(() => saveConversationToCloud(snapshot, userId));
+
+    cloudSaveQueues.set(queueKey, next);
+
+    next.catch(error => {
+        console.error("Cloud chat save failed:", error.message);
+    }).finally(() => {
+        if (cloudSaveQueues.get(queueKey) === next) {
+            cloudSaveQueues.delete(queueKey);
+        }
+    });
+}
+
+async function loadAccountConversations(session) {
+    if (!supabaseClient || !session?.user?.id) return;
+
+    const userId = session.user.id;
+    const sequence = ++accountLoadSequence;
+
+    loadingAccountUserId = userId;
+
+    try {
+        const { data, error } = await supabaseClient
+            .from("chat_history")
+            .select("conversation_id,title,messages,updated_at")
+            .eq("user_id", userId)
+            .order("updated_at", { ascending: false });
+
+        if (error) throw error;
+
+        // Ignore an old response if the signed-in account changed.
+        if (
+            sequence !== accountLoadSequence ||
+            currentSession?.user?.id !== userId
+        ) {
+            return;
+        }
+
+        conversations = (data || []).map(row => ({
+            id: row.conversation_id,
+            title: row.title || "New chat",
+            messages: Array.isArray(row.messages) ? row.messages : [],
+            updatedAt: row.updated_at
+                ? new Date(row.updated_at).getTime()
+                : Date.now()
+        }));
+
+        activeConversationId = conversations.length
+            ? conversations[0].id
+            : null;
+
+        loadedAccountUserId = userId;
+        saveLocalConversations(userId);
+        renderChat();
+        renderHistory();
+
+    } catch (error) {
+        console.error("Could not load cloud chat history:", error.message);
+
+        if (
+            sequence === accountLoadSequence &&
+            currentSession?.user?.id === userId
+        ) {
+            // Only use the local cache belonging to this signed-in user.
+            conversations = loadLocalConversations(userId);
+            activeConversationId = conversations.length
+                ? conversations[0].id
+                : null;
+
+            renderChat();
+            renderHistory();
+
+            alert(
+                "Could not load cloud chat history. " +
+                "Showing this account's local cache for now. " +
+                "Please check your connection and reload."
+            );
+        }
+    } finally {
+        if (loadingAccountUserId === userId) {
+            loadingAccountUserId = null;
+        }
+    }
+}
+
+async function queueCloudDelete(conversationId, userId) {
+    if (!conversationId || !userId) return;
+
+    const session = await getCurrentCloudSession();
+
+    if (session.user.id !== userId) {
+        throw new Error("The signed-in account has changed.");
+    }
+
+    const { error } = await supabaseClient
+        .from("chat_history")
+        .delete()
+        .eq("user_id", userId)
+        .eq("conversation_id", conversationId);
+
+    if (error) throw error;
+}
+
 
 // --------------------------------------------------
 // AUTHENTICATION INTERFACE
@@ -933,10 +1169,21 @@ function setAuthMessage(text) {
 }
 
 function showAuthScreen(message = "") {
+    accountLoadSequence++;
+    loadedAccountUserId = null;
+    loadingAccountUserId = null;
     currentSession = null;
+    conversations = [];
+    activeConversationId = null;
+
     authScreen.classList.add("active");
     chatScreen.classList.remove("active");
     voiceScreen.classList.remove("active");
+    settingsPanel.classList.remove("open");
+    sidebar.classList.remove("open");
+
+    renderChat();
+    renderHistory();
     setAuthMessage(message);
 }
 
@@ -946,17 +1193,41 @@ function showChatForSession(session) {
         return;
     }
 
+    const previousUserId = currentSession?.user?.id;
+    const newUserId = session.user?.id;
+
+    if (!newUserId) {
+        showAuthScreen("Please sign in again.");
+        return;
+    }
+
     currentSession = session;
     authScreen.classList.remove("active");
     voiceScreen.classList.remove("active");
     chatScreen.classList.add("active");
 
-    if (signedInEmail) {
-        signedInEmail.textContent = session.user?.email || "";
+    signedInEmail.textContent = session.user?.email || "";
+
+    if (previousUserId && previousUserId !== newUserId) {
+        conversations = [];
+        activeConversationId = null;
+        loadedAccountUserId = null;
     }
 
+    if (
+        loadedAccountUserId === newUserId ||
+        loadingAccountUserId === newUserId
+    ) {
+        return;
+    }
+
+    // Do not show a previous account's history while loading this account.
+    conversations = [];
+    activeConversationId = null;
     renderChat();
     renderHistory();
+
+    loadAccountConversations(session);
 }
 
 function setAuthBusy(busy) {
@@ -968,7 +1239,9 @@ authForm.addEventListener("submit", async event => {
     event.preventDefault();
 
     if (!supabaseClient) {
-        setAuthMessage("Sign-in is not configured. Check the Supabase environment variables in Render.");
+        setAuthMessage(
+            "Sign-in is not configured. Check the Supabase environment variables in Render."
+        );
         return;
     }
 
@@ -984,10 +1257,11 @@ authForm.addEventListener("submit", async event => {
     setAuthMessage("Signing in…");
 
     try {
-        const { data, error } = await supabaseClient.auth.signInWithPassword({
-            email,
-            password
-        });
+        const { data, error } =
+            await supabaseClient.auth.signInWithPassword({
+                email,
+                password
+            });
 
         if (error) throw error;
 
@@ -1008,7 +1282,9 @@ authForm.addEventListener("submit", async event => {
 
 signupButton.addEventListener("click", async () => {
     if (!supabaseClient) {
-        setAuthMessage("Sign-up is not configured. Check the Supabase environment variables in Render.");
+        setAuthMessage(
+            "Sign-up is not configured. Check the Supabase environment variables in Render."
+        );
         return;
     }
 
@@ -1044,7 +1320,7 @@ signupButton.addEventListener("click", async () => {
             setAuthMessage("");
         } else {
             setAuthMessage(
-                "Account request completed. If this is a new account, check your email for a confirmation link. After confirming, return here and sign in. If the account already exists, try signing in."
+                "Account request completed. Check your email for a confirmation link. After confirming, return here and sign in."
             );
         }
 
@@ -1057,33 +1333,34 @@ signupButton.addEventListener("click", async () => {
 
 
 // --------------------------------------------------
-// LOCAL CHAT HISTORY
+// LOCAL + CLOUD CHAT OPERATIONS
 // --------------------------------------------------
 
-function makeId() {
-    return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
-}
-
-function loadConversations() {
-    try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-        return Array.isArray(saved) ? saved : [];
-    } catch (error) {
-        return [];
-    }
-}
-
 function persistConversations() {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
-        return true;
-    } catch (error) {
-        alert("The browser could not save chat history. Check available device storage.");
+    const userId = currentSession?.user?.id;
+
+    if (!userId) {
+        console.warn("Chat cache not saved because nobody is signed in.");
         return false;
     }
+
+    saveLocalConversations(userId);
+
+    const conversation = getActiveConversation();
+
+    if (conversation) {
+        queueCloudSave(conversation);
+    }
+
+    return true;
 }
 
 function newConversation() {
+    if (!currentSession?.user?.id) {
+        showAuthScreen("Please sign in to create a chat.");
+        return;
+    }
+
     const conversation = {
         id: makeId(),
         title: "New chat",
@@ -1093,15 +1370,18 @@ function newConversation() {
 
     conversations.unshift(conversation);
     activeConversationId = conversation.id;
+
     persistConversations();
     renderChat();
     renderHistory();
     sidebar.classList.remove("open");
-    $("messageInput").focus();
+    messageInput.focus();
 }
 
 function getActiveConversation() {
-    return conversations.find(item => item.id === activeConversationId);
+    return conversations.find(
+        item => item.id === activeConversationId
+    );
 }
 
 function ensureConversation() {
@@ -1114,6 +1394,7 @@ function ensureConversation() {
             messages: [],
             updatedAt: Date.now()
         };
+
         conversations.unshift(conversation);
         activeConversationId = conversation.id;
     }
@@ -1125,17 +1406,19 @@ function addSavedMessage(role, text) {
     const conversation = ensureConversation();
 
     conversation.messages.push({
-        role: role,
-        text: text,
+        role,
+        text,
         time: Date.now()
     });
 
     if (conversation.title === "New chat" && role === "user") {
-        conversation.title = text.slice(0, 42) + (text.length > 42 ? "…" : "");
+        conversation.title =
+            text.slice(0, 42) + (text.length > 42 ? "…" : "");
     }
 
     conversation.updatedAt = Date.now();
     conversations.sort((a, b) => b.updatedAt - a.updatedAt);
+
     persistConversations();
     renderChat();
     renderHistory();
@@ -1155,6 +1438,7 @@ function openConversation(id) {
 
 function renderChat() {
     chatMessages.replaceChildren();
+
     const conversation = getActiveConversation();
 
     if (!conversation || conversation.messages.length === 0) {
@@ -1174,7 +1458,8 @@ function renderChat() {
 
     conversation.messages.forEach(message => {
         const bubble = document.createElement("div");
-        bubble.className = "message " + (message.role === "user" ? "user" : "ai");
+        bubble.className =
+            "message " + (message.role === "user" ? "user" : "ai");
         bubble.textContent = message.text;
         chatMessages.appendChild(bubble);
     });
@@ -1206,7 +1491,10 @@ function renderHistory() {
         }
 
         button.textContent = conversation.title || "New chat";
-        button.addEventListener("click", () => openConversation(conversation.id));
+        button.addEventListener(
+            "click",
+            () => openConversation(conversation.id)
+        );
 
         const deleteButton = document.createElement("button");
         deleteButton.type = "button";
@@ -1216,6 +1504,7 @@ function renderHistory() {
             "aria-label",
             "Delete chat: " + (conversation.title || "New chat")
         );
+
         deleteButton.addEventListener("click", event => {
             event.stopPropagation();
             deleteConversation(conversation.id);
@@ -1226,24 +1515,46 @@ function renderHistory() {
     });
 }
 
-function deleteConversation(id) {
+async function deleteConversation(id) {
     const conversation = conversations.find(item => item.id === id);
     if (!conversation) return;
 
+    const userId = currentSession?.user?.id;
+
+    if (!userId) {
+        alert("Please sign in again before deleting chats.");
+        return;
+    }
+
     const title = conversation.title || "New chat";
+
     if (!window.confirm('Delete "' + title + '"? This cannot be undone.')) {
         return;
     }
 
+    try {
+        // Delete in Supabase first; keep the local copy if it fails.
+        await queueCloudDelete(id, userId);
+    } catch (error) {
+        console.error("Cloud deletion failed:", error);
+        alert(
+            "The chat could not be deleted from your account. " +
+            "Please check your connection and try again."
+        );
+        return;
+    }
+
+    if (currentSession?.user?.id !== userId) return;
+
     conversations = conversations.filter(item => item.id !== id);
 
     if (activeConversationId === id) {
-        activeConversationId = conversations.length > 0
+        activeConversationId = conversations.length
             ? conversations[0].id
             : null;
     }
 
-    persistConversations();
+    saveLocalConversations(userId);
     renderChat();
     renderHistory();
 }
@@ -1259,7 +1570,7 @@ function deleteCurrentConversation() {
 
 
 // --------------------------------------------------
-// AI CHAT REQUEST — SEND SUPABASE ACCESS TOKEN
+// AI CHAT REQUEST — LOGIN REQUIRED
 // --------------------------------------------------
 
 async function getReply(text) {
@@ -1300,7 +1611,9 @@ async function getReply(text) {
 
     if (response.status === 401) {
         await supabaseClient.auth.signOut();
-        showAuthScreen(data.reply || "Your session has expired. Please sign in again.");
+        showAuthScreen(
+            data.reply || "Your session has expired. Please sign in again."
+        );
         throw new Error(data.reply || "Please sign in again.");
     }
 
@@ -1318,10 +1631,17 @@ async function getReply(text) {
 
 async function sendTextMessage(text) {
     text = text.trim();
+
     if (!text || requestInProgress) return;
+
+    if (!currentSession?.user?.id) {
+        showAuthScreen("Please sign in to continue.");
+        return;
+    }
 
     requestInProgress = true;
     sendButton.disabled = true;
+
     addSavedMessage("user", text);
     messageInput.value = "";
 
@@ -1339,7 +1659,13 @@ async function sendTextMessage(text) {
         speakReply(reply);
     } catch (error) {
         $("thinkingMessage")?.remove();
-        addSavedMessage("ai", "Sorry, I could not get a reply. " + error.message);
+
+        if (currentSession?.user?.id) {
+            addSavedMessage(
+                "ai",
+                "Sorry, I could not get a reply. " + error.message
+            );
+        }
     } finally {
         requestInProgress = false;
         sendButton.disabled = false;
@@ -1353,9 +1679,14 @@ chatForm.addEventListener("submit", event => {
 
 $("newChatButton").addEventListener("click", newConversation);
 $("newChatShortcut").addEventListener("click", newConversation);
-$("deleteCurrentChatButton").addEventListener("click", deleteCurrentConversation);
+$("deleteCurrentChatButton").addEventListener(
+    "click",
+    deleteCurrentConversation
+);
 
-$("menuButton").addEventListener("click", () => sidebar.classList.toggle("open"));
+$("menuButton").addEventListener("click", () => {
+    sidebar.classList.toggle("open");
+});
 
 $("voiceMenuButton").addEventListener("click", () => {
     sidebar.classList.toggle("open");
@@ -1370,12 +1701,14 @@ $("voiceMenuButton").addEventListener("click", () => {
 
 function loadVoices() {
     if (!("speechSynthesis" in window)) {
-        voiceSelect.innerHTML = '<option value="">Speech unavailable</option>';
+        voiceSelect.innerHTML =
+            '<option value="">Speech unavailable</option>';
         return;
     }
 
     availableVoices = speechSynthesis.getVoices();
     const savedValue = localStorage.getItem(VOICE_KEY) || "";
+
     voiceSelect.replaceChildren();
 
     const defaultOption = document.createElement("option");
@@ -1390,7 +1723,10 @@ function loadVoices() {
         voiceSelect.appendChild(option);
     });
 
-    if (savedValue !== "" && Number(savedValue) < availableVoices.length) {
+    if (
+        savedValue !== "" &&
+        Number(savedValue) < availableVoices.length
+    ) {
         voiceSelect.value = savedValue;
     }
 }
@@ -1466,7 +1802,9 @@ function speakReply(text, forVoiceChat = false) {
 }
 
 $("previewVoiceButton").addEventListener("click", () => {
-    speakReply("Hello! I am A.M., your personal AI assistant. How can I help you today?");
+    speakReply(
+        "Hello! I am A.M., your personal AI assistant. How can I help you today?"
+    );
 });
 
 
@@ -1491,7 +1829,9 @@ $("closeSettingsButton").addEventListener("click", closeSettings);
 // VOICE CONVERSATION
 // --------------------------------------------------
 
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+
 recognitionSupported = Boolean(SpeechRecognition);
 
 function setVoiceStatus(text) {
@@ -1499,6 +1839,11 @@ function setVoiceStatus(text) {
 }
 
 function startVoiceScreen() {
+    if (!currentSession?.user?.id) {
+        showAuthScreen("Please sign in to use voice conversation.");
+        return;
+    }
+
     voiceDraft = [];
     voiceActive = true;
     microphonePaused = false;
@@ -1511,7 +1856,9 @@ function startVoiceScreen() {
     voiceOrb.classList.add("listening");
 
     if (!recognitionSupported) {
-        setVoiceStatus("Voice recognition is unavailable. Try Chrome on HTTPS or use the text box below.");
+        setVoiceStatus(
+            "Voice recognition is unavailable. Try Chrome on HTTPS or use the text box below."
+        );
         return;
     }
 
@@ -1523,8 +1870,12 @@ $("startVoiceButton").addEventListener("click", startVoiceScreen);
 
 function startRecognition() {
     if (
-        !voiceActive || microphonePaused || requestInProgress ||
-        isSpeaking || recognitionStarting || !recognitionSupported
+        !voiceActive ||
+        microphonePaused ||
+        requestInProgress ||
+        isSpeaking ||
+        recognitionStarting ||
+        !recognitionSupported
     ) {
         return;
     }
@@ -1547,17 +1898,26 @@ function startRecognition() {
 
         recognition.onresult = async event => {
             const transcript = event.results[0][0].transcript.trim();
-            if (transcript) await sendVoiceMessage(transcript);
+
+            if (transcript) {
+                await sendVoiceMessage(transcript);
+            }
         };
 
         recognition.onerror = event => {
             recognitionStarting = false;
+
             if (!voiceActive) return;
 
-            if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+            if (
+                event.error === "not-allowed" ||
+                event.error === "service-not-allowed"
+            ) {
                 voiceActive = false;
                 voiceOrb.classList.remove("listening");
-                setVoiceStatus("Microphone permission denied. Allow microphone access in your browser settings, then try again.");
+                setVoiceStatus(
+                    "Microphone permission denied. Allow microphone access in your browser settings, then try again."
+                );
                 return;
             }
 
@@ -1578,7 +1938,12 @@ function startRecognition() {
         recognition.onend = () => {
             recognitionStarting = false;
 
-            if (voiceActive && !microphonePaused && !isSpeaking && !requestInProgress) {
+            if (
+                voiceActive &&
+                !microphonePaused &&
+                !isSpeaking &&
+                !requestInProgress
+            ) {
                 scheduleRecognition();
             }
         };
@@ -1599,7 +1964,12 @@ function scheduleRecognition() {
     clearTimeout(nextRecognitionTimer);
 
     nextRecognitionTimer = setTimeout(() => {
-        if (voiceActive && !microphonePaused && !isSpeaking && !requestInProgress) {
+        if (
+            voiceActive &&
+            !microphonePaused &&
+            !isSpeaking &&
+            !requestInProgress
+        ) {
             startRecognition();
         }
     }, 500);
@@ -1609,14 +1979,25 @@ async function sendVoiceMessage(text) {
     if (!voiceActive || requestInProgress) return;
 
     requestInProgress = true;
-    voiceDraft.push({ role: "user", text: text, time: Date.now() });
+
+    voiceDraft.push({
+        role: "user",
+        text,
+        time: Date.now()
+    });
+
     voiceOrb.classList.remove("listening");
     setVoiceStatus("A.M. is thinking…");
 
     try {
         const reply = await getReply(text);
-        voiceDraft.push({ role: "ai", text: reply, time: Date.now() });
-        setVoiceStatus("A.M. is preparing a reply…");
+
+        voiceDraft.push({
+            role: "ai",
+            text: reply,
+            time: Date.now()
+        });
+
         requestInProgress = false;
         speakReply(reply, true);
 
@@ -1647,7 +2028,10 @@ $("voiceMicButton").addEventListener("click", () => {
 
     if (microphonePaused) {
         clearTimeout(nextRecognitionTimer);
-        try { recognition?.stop(); } catch (error) {}
+
+        try {
+            recognition?.stop();
+        } catch (error) {}
 
         voiceOrb.classList.remove("listening");
         $("voiceMicButton").textContent = "🔇";
@@ -1675,7 +2059,10 @@ $("voiceTextForm").addEventListener("submit", async event => {
 
     input.value = "";
 
-    if (!voiceActive) startVoiceScreen();
+    if (!voiceActive) {
+        startVoiceScreen();
+    }
+
     await sendVoiceMessage(text);
 });
 
@@ -1683,20 +2070,25 @@ $("voicePlus").addEventListener("click", exitVoice);
 
 
 // --------------------------------------------------
-// EXIT AND ASK WHETHER TO SAVE
+// EXIT AND SAVE VOICE CONVERSATION
 // --------------------------------------------------
 
 function stopVoiceCapture() {
     voiceActive = false;
     microphonePaused = true;
+
     clearTimeout(nextRecognitionTimer);
 
-    if ("speechSynthesis" in window) speechSynthesis.cancel();
+    if ("speechSynthesis" in window) {
+        speechSynthesis.cancel();
+    }
 
-    try { recognition?.stop(); } catch (error) {}
+    try {
+        recognition?.stop();
+    } catch (error) {}
 
     isSpeaking = false;
-    requestInProgress = false;
+    recognitionStarting = false;
     voiceOrb.classList.remove("listening", "speaking");
 }
 
@@ -1717,38 +2109,70 @@ function returnToChat() {
     saveModal.classList.remove("open");
     voiceScreen.classList.remove("active");
     chatScreen.classList.add("active");
+
     voiceDraft = [];
     voiceExitPending = false;
+
     renderChat();
     renderHistory();
 }
 
-$("saveVoiceButton").addEventListener("click", () => {
+$("saveVoiceButton").addEventListener("click", async () => {
     if (!voiceExitPending) return;
 
-    const conversation = ensureConversation();
-
-    voiceDraft.forEach(message => {
-        conversation.messages.push({
-            role: message.role === "user" ? "user" : "ai",
-            text: message.text,
-            time: message.time || Date.now()
-        });
-    });
-
-    if (conversation.title === "New chat" && voiceDraft.length > 0) {
-        const firstUserMessage = voiceDraft.find(message => message.role === "user");
-
-        if (firstUserMessage) {
-            conversation.title = firstUserMessage.text.slice(0, 42) +
-                (firstUserMessage.text.length > 42 ? "…" : "");
-        }
+    if (!currentSession?.user?.id) {
+        alert("Please sign in again before saving this conversation.");
+        return;
     }
 
-    conversation.updatedAt = Date.now();
-    persistConversations();
-    voiceDraft = [];
-    returnToChat();
+    const button = $("saveVoiceButton");
+    button.disabled = true;
+
+    try {
+        const conversation = ensureConversation();
+
+        voiceDraft.forEach(message => {
+            conversation.messages.push({
+                role: message.role === "user" ? "user" : "ai",
+                text: message.text,
+                time: message.time || Date.now()
+            });
+        });
+
+        if (conversation.title === "New chat" && voiceDraft.length > 0) {
+            const firstUserMessage = voiceDraft.find(
+                message => message.role === "user"
+            );
+
+            if (firstUserMessage) {
+                conversation.title =
+                    firstUserMessage.text.slice(0, 42) +
+                    (firstUserMessage.text.length > 42 ? "…" : "");
+            }
+        }
+
+        conversation.updatedAt = Date.now();
+        saveLocalConversations(currentSession.user.id);
+
+        await saveConversationToCloud(
+            conversation,
+            currentSession.user.id
+        );
+
+        renderChat();
+        renderHistory();
+        voiceDraft = [];
+        returnToChat();
+
+    } catch (error) {
+        console.error("Could not save voice conversation:", error);
+        alert(
+            "The voice conversation could not be saved to your account. " +
+            "Your local cache has been kept. Please check your connection and try again."
+        );
+    } finally {
+        button.disabled = false;
+    }
 });
 
 $("discardVoiceButton").addEventListener("click", () => {
@@ -1781,31 +2205,32 @@ $("logoutButton").addEventListener("click", async () => {
 // STARTUP AND RESTORE AUTH SESSION
 // --------------------------------------------------
 
-if (conversations.length > 0) {
-    activeConversationId = conversations[0].id;
-} else {
-    activeConversationId = null;
-}
-
 renderChat();
 renderHistory();
 loadVoices();
 
 if (!supabaseClient) {
-    showAuthScreen("Sign-in is not configured. Check SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in Render.");
+    showAuthScreen(
+        "Sign-in is not configured. Check SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in Render."
+    );
 } else {
     supabaseClient.auth.onAuthStateChange((_event, session) => {
-        if (session) {
-            showChatForSession(session);
-        } else {
-            showAuthScreen();
-        }
+        // Defer work outside the auth callback to avoid blocking Supabase auth.
+        Promise.resolve().then(() => {
+            if (session) {
+                showChatForSession(session);
+            } else {
+                showAuthScreen();
+            }
+        });
     });
 
     supabaseClient.auth.getSession()
         .then(({ data, error }) => {
             if (error) {
-                showAuthScreen("Could not restore your session. Please sign in.");
+                showAuthScreen(
+                    "Could not restore your session. Please sign in."
+                );
             } else if (data.session) {
                 showChatForSession(data.session);
             } else {
@@ -1813,7 +2238,9 @@ if (!supabaseClient) {
             }
         })
         .catch(() => {
-            showAuthScreen("Could not check your session. Please sign in again.");
+            showAuthScreen(
+                "Could not check your session. Please sign in again."
+            );
         });
 }
 </script>
@@ -1877,7 +2304,10 @@ def chat():
             )
             prompt = message + language_instruction
         else:
-            prompt = message + "\n\nReply in the same language the user used."
+            prompt = (
+                message +
+                "\n\nReply in the same language the user used."
+            )
 
         reply = get_ai_reply(prompt)
 
@@ -1894,7 +2324,10 @@ def chat():
 
     finally:
         elapsed = time.perf_counter() - start_time
-        print(f"Total Future AI time: {elapsed:.2f} seconds", flush=True)
+        print(
+            f"Total Future AI time: {elapsed:.2f} seconds",
+            flush=True
+        )
 
 
 # --------------------------------------------------
@@ -1926,7 +2359,10 @@ if __name__ == "__main__":
     print("Creator:", CREATOR_NAME)
     print("Open http://127.0.0.1:5000 on this computer.")
     print("Gemini configured:", bool(GEMINI_API_KEY))
-    print("Supabase configured:", bool(SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY))
+    print(
+        "Supabase configured:",
+        bool(SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY)
+    )
     print("Ollama model:", MODEL)
     print("=" * 45)
 
