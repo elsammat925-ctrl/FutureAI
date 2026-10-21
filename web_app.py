@@ -1,4 +1,3 @@
-
 from flask import Flask, request, jsonify, render_template_string
 import os
 import json
@@ -332,10 +331,13 @@ button:disabled { opacity: .5; cursor: wait; }
 }
 
 .topbar {
+    position: relative;
+    z-index: 52;
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 20px 22px;
+    background: white;
 }
 
 .brand { font-size: 20px; font-weight: 700; }
@@ -399,18 +401,42 @@ button:disabled { opacity: .5; cursor: wait; }
 #chatScreen { flex-direction: column; }
 .chat-layout { display: flex; flex: 1; min-height: 0; }
 
-.sidebar {
+/* Clickable dim background behind the history drawer */
+.sidebar-backdrop {
+    position: fixed;
+    z-index: 50;
+    inset: 0;
     display: none;
-    width: min(320px, 85vw);
-    flex-shrink: 0;
-    flex-direction: column;
-    padding: 16px;
-    background: #f7f7f9;
-    border-right: 1px solid var(--border);
-    overflow-y: auto;
+    background: #00000035;
+    touch-action: manipulation;
 }
 
-.sidebar.open { display: flex; }
+.sidebar-backdrop.open { display: block; }
+
+/* Floating history drawer: it no longer squeezes the chat */
+.sidebar {
+    position: fixed;
+    z-index: 51;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    display: none;
+    width: min(320px, 85vw);
+    flex-direction: column;
+    padding: 108px 16px 20px;
+    background: #f7f7f9;
+    border-right: 1px solid var(--border);
+    box-shadow: 8px 0 30px #00000012;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transform: translateX(-105%);
+    transition: transform .22s ease;
+}
+
+.sidebar.open {
+    display: flex;
+    transform: translateX(0);
+}
 
 .new-chat {
     padding: 13px;
@@ -700,7 +726,7 @@ button:disabled { opacity: .5; cursor: wait; }
 
 .panel {
     position: fixed;
-    z-index: 20;
+    z-index: 60;
     top: 0;
     right: 0;
     bottom: 0;
@@ -726,7 +752,7 @@ button:disabled { opacity: .5; cursor: wait; }
 
 .modal-backdrop {
     position: fixed;
-    z-index: 40;
+    z-index: 70;
     inset: 0;
     display: none;
     align-items: center;
@@ -805,13 +831,18 @@ button:disabled { opacity: .5; cursor: wait; }
 
 <section id="chatScreen" class="screen">
     <div class="topbar">
-        <button class="icon-button" id="menuButton" aria-label="Open chat history">☰</button>
+        <button class="icon-button" id="menuButton" aria-label="Open chat history"
+                aria-expanded="false">☰</button>
         <div class="brand">A.M.</div>
         <button class="icon-button" id="settingsButton" aria-label="Voice settings">☷</button>
     </div>
 
+    <!-- Tap this dimmed area to close chat history -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"
+         aria-hidden="true"></div>
+
     <div class="chat-layout">
-        <aside class="sidebar" id="sidebar">
+        <aside class="sidebar" id="sidebar" aria-label="Chat history">
             <button class="new-chat" id="newChatButton">＋ New chat</button>
             <button class="delete-current-chat" id="deleteCurrentChatButton">Delete current chat</button>
             <div class="history-heading">CHAT HISTORY</div>
@@ -920,6 +951,8 @@ const messageInput = $("messageInput");
 const sendButton = $("sendButton");
 const historyList = $("historyList");
 const sidebar = $("sidebar");
+const sidebarBackdrop = $("sidebarBackdrop");
+const menuButton = $("menuButton");
 const voiceOrb = $("voiceOrb");
 const voiceStatus = $("voiceStatus");
 const voiceSelect = $("voiceSelect");
@@ -948,6 +981,71 @@ let loadedAccountUserId = null;
 let loadingAccountUserId = null;
 let accountLoadSequence = 0;
 const cloudSaveQueues = new Map();
+
+
+// --------------------------------------------------
+// CHAT HISTORY DRAWER
+// --------------------------------------------------
+
+function openChatHistory() {
+    sidebar.classList.add("open");
+    sidebarBackdrop.classList.add("open");
+    menuButton.setAttribute("aria-expanded", "true");
+    sidebarBackdrop.setAttribute("aria-hidden", "false");
+}
+
+function closeChatHistory() {
+    sidebar.classList.remove("open");
+    sidebarBackdrop.classList.remove("open");
+    menuButton.setAttribute("aria-expanded", "false");
+    sidebarBackdrop.setAttribute("aria-hidden", "true");
+}
+
+function toggleChatHistory() {
+    if (sidebar.classList.contains("open")) {
+        closeChatHistory();
+    } else {
+        openChatHistory();
+    }
+}
+
+menuButton.addEventListener("click", event => {
+    event.stopPropagation();
+    toggleChatHistory();
+});
+
+sidebar.addEventListener("click", event => {
+    // Do not let clicks inside the drawer count as outside clicks.
+    event.stopPropagation();
+});
+
+sidebarBackdrop.addEventListener("click", () => {
+    closeChatHistory();
+});
+
+document.addEventListener("click", event => {
+    if (!sidebar.classList.contains("open")) return;
+
+    const clickedInsideSidebar = sidebar.contains(event.target);
+    const clickedMenuButton = menuButton.contains(event.target);
+    const clickedVoiceMenuButton =
+        $("voiceMenuButton").contains(event.target);
+
+    if (
+        !clickedInsideSidebar &&
+        !clickedMenuButton &&
+        !clickedVoiceMenuButton
+    ) {
+        closeChatHistory();
+    }
+});
+
+document.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+        closeChatHistory();
+        closeSettings();
+    }
+});
 
 
 // --------------------------------------------------
@@ -1019,7 +1117,6 @@ async function saveConversationToCloud(conversation, userId) {
 
     const session = await getCurrentCloudSession();
 
-    // Do not write one account's data using another account's session.
     if (session.user.id !== userId) {
         throw new Error("Account changed before the chat could be saved.");
     }
@@ -1048,7 +1145,6 @@ function queueCloudSave(conversation) {
 
     if (!userId || !conversation?.id) return;
 
-    // Capture the current version so later edits cannot mutate this save.
     const snapshot = JSON.parse(JSON.stringify(conversation));
     const queueKey = userId + ":" + snapshot.id;
 
@@ -1086,7 +1182,6 @@ async function loadAccountConversations(session) {
 
         if (error) throw error;
 
-        // Ignore an old response if the signed-in account changed.
         if (
             sequence !== accountLoadSequence ||
             currentSession?.user?.id !== userId
@@ -1119,7 +1214,6 @@ async function loadAccountConversations(session) {
             sequence === accountLoadSequence &&
             currentSession?.user?.id === userId
         ) {
-            // Only use the local cache belonging to this signed-in user.
             conversations = loadLocalConversations(userId);
             activeConversationId = conversations.length
                 ? conversations[0].id
@@ -1180,7 +1274,7 @@ function showAuthScreen(message = "") {
     chatScreen.classList.remove("active");
     voiceScreen.classList.remove("active");
     settingsPanel.classList.remove("open");
-    sidebar.classList.remove("open");
+    closeChatHistory();
 
     renderChat();
     renderHistory();
@@ -1221,7 +1315,6 @@ function showChatForSession(session) {
         return;
     }
 
-    // Do not show a previous account's history while loading this account.
     conversations = [];
     activeConversationId = null;
     renderChat();
@@ -1374,7 +1467,9 @@ function newConversation() {
     persistConversations();
     renderChat();
     renderHistory();
-    sidebar.classList.remove("open");
+    closeChatHistory();
+    chatScreen.classList.add("active");
+    voiceScreen.classList.remove("active");
     messageInput.focus();
 }
 
@@ -1431,7 +1526,7 @@ function openConversation(id) {
     activeConversationId = id;
     renderChat();
     renderHistory();
-    sidebar.classList.remove("open");
+    closeChatHistory();
     chatScreen.classList.add("active");
     voiceScreen.classList.remove("active");
 }
@@ -1533,7 +1628,6 @@ async function deleteConversation(id) {
     }
 
     try {
-        // Delete in Supabase first; keep the local copy if it fails.
         await queueCloudDelete(id, userId);
     } catch (error) {
         console.error("Cloud deletion failed:", error);
@@ -1567,6 +1661,19 @@ function deleteCurrentConversation() {
 
     deleteConversation(activeConversationId);
 }
+
+$("newChatButton").addEventListener("click", newConversation);
+$("newChatShortcut").addEventListener("click", newConversation);
+$("deleteCurrentChatButton").addEventListener(
+    "click",
+    deleteCurrentConversation
+);
+
+$("voiceMenuButton").addEventListener("click", () => {
+    chatScreen.classList.add("active");
+    voiceScreen.classList.remove("active");
+    openChatHistory();
+});
 
 
 // --------------------------------------------------
@@ -1675,23 +1782,6 @@ async function sendTextMessage(text) {
 chatForm.addEventListener("submit", event => {
     event.preventDefault();
     sendTextMessage(messageInput.value);
-});
-
-$("newChatButton").addEventListener("click", newConversation);
-$("newChatShortcut").addEventListener("click", newConversation);
-$("deleteCurrentChatButton").addEventListener(
-    "click",
-    deleteCurrentConversation
-);
-
-$("menuButton").addEventListener("click", () => {
-    sidebar.classList.toggle("open");
-});
-
-$("voiceMenuButton").addEventListener("click", () => {
-    sidebar.classList.toggle("open");
-    chatScreen.classList.add("active");
-    voiceScreen.classList.remove("active");
 });
 
 
@@ -1852,7 +1942,7 @@ function startVoiceScreen() {
     chatScreen.classList.remove("active");
     voiceScreen.classList.add("active");
     closeSettings();
-    sidebar.classList.remove("open");
+    closeChatHistory();
     voiceOrb.classList.add("listening");
 
     if (!recognitionSupported) {
@@ -2215,7 +2305,6 @@ if (!supabaseClient) {
     );
 } else {
     supabaseClient.auth.onAuthStateChange((_event, session) => {
-        // Defer work outside the auth callback to avoid blocking Supabase auth.
         Promise.resolve().then(() => {
             if (session) {
                 showChatForSession(session);
