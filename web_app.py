@@ -531,6 +531,7 @@ PAGE = r"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta name="google-site-verification" content="5X3dTZfzS-Uw27ZymaU-tzhw8OQDdL-hXF_VgHpwYKM" />
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#ffffff">
