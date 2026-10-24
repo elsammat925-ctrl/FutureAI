@@ -9,8 +9,19 @@ import io
 from PIL import Image
 
 from core.settings import MODEL
-
 app = Flask(__name__)
+@app.route("/sitemap.xml")
+def sitemap():
+    from flask import Response
+
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://future-aabel.onrender.com/</loc>
+  </url>
+</urlset>"""
+    return Response(xml, mimetype="application/xml")
+
 
 # --------------------------------------------------
 # SETTINGS
