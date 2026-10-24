@@ -3,6 +3,10 @@ import os
 import json
 import requests
 import time
+import sqlite3
+from datetime import datetime, timezone
+import io
+from PIL import Image
 
 from core.settings import MODEL
 
@@ -26,6 +30,65 @@ CLOUDFLARE_ACCOUNT_ID = os.environ.get(
 ).strip()
 
 CLOUDFLARE_IMAGE_MODEL = "@cf/black-forest-labs/flux-2-klein-4b"
+
+# --------------------------------------------------
+# DAILY IMAGE LIMIT
+# --------------------------------------------------
+
+DAILY_IMAGE_LIMIT = 350
+
+IMAGE_USAGE_DB = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "image_usage.sqlite3"
+)
+
+
+def reserve_image_slot():
+    """Reserve one daily image slot safely."""
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    with sqlite3.connect(IMAGE_USAGE_DB, timeout=10) as db:
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS image_daily_usage (
+                usage_date TEXT PRIMARY KEY,
+                image_count INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+
+        db.execute("BEGIN IMMEDIATE")
+
+        row = db.execute(
+            "SELECT image_count FROM image_daily_usage WHERE usage_date = ?",
+            (today,)
+        ).fetchone()
+
+        count = row[0] if row else 0
+
+        if count >= DAILY_IMAGE_LIMIT:
+            db.commit()
+            return False, count, today
+
+        db.execute("""
+            INSERT INTO image_daily_usage (usage_date, image_count)
+            VALUES (?, 1)
+            ON CONFLICT(usage_date)
+            DO UPDATE SET image_count = image_count + 1
+        """, (today,))
+
+        db.commit()
+        return True, count + 1, today
+
+
+def release_image_slot(usage_date):
+    """Release a reserved slot when generation fails."""
+    with sqlite3.connect(IMAGE_USAGE_DB, timeout=10) as db:
+        db.execute("""
+            UPDATE image_daily_usage
+            SET image_count = MAX(0, image_count - 1)
+            WHERE usage_date = ?
+        """, (usage_date,))
+        db.commit()
+
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_PUBLISHABLE_KEY = os.environ.get(
@@ -1041,7 +1104,8 @@ button:disabled { opacity: .5; cursor: wait; }
                 <button class="action-button" id="newChatShortcut">＋ New chat</button>
             </div>
             
-<div id="imageTools" style="margin: 12px 0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+<div id="imageTools" style="display: none; margin: 12px 0; gap: 8px; flex-wrap: wrap; align-items: center;">
+    <button type="button" class="action-button" id="addPhotoButton">📎 Add photos and files</button>
     <button type="button" class="action-button" id="createImageButton">
         🎨 Create image
     </button>
@@ -1054,22 +1118,16 @@ button:disabled { opacity: .5; cursor: wait; }
         type="file"
         id="imageUpload"
         accept="image/jpeg,image/png,image/webp"
-        hidden
+        style="display:none;"
     >
 
-    <input
-        type="text"
-        id="imagePrompt"
-        placeholder="Describe the image you want..."
-        maxlength="1800"
-        style="flex: 1; min-width: 180px; padding: 12px; border: 1px solid #ccc; border-radius: 10px;"
-    >
 </div>
 
 <div id="imageResult" style="margin: 12px 0;"></div>
 
 
             <form class="composer" id="chatForm">
+                <button class="round-button" id="addFilesButton" type="button" aria-label="Add files and more" aria-expanded="false">＋</button>
                 <input id="messageInput" placeholder="Message A.M...." autocomplete="off" required>
                 <button class="round-button send-button" id="sendButton" type="submit" aria-label="Send message">↑</button>
             </form>
@@ -1731,14 +1789,20 @@ function ensureConversation() {
     return conversation;
 }
 
-function addSavedMessage(role, text) {
+function addSavedMessage(role, text, imageUrl = null) {
     const conversation = ensureConversation();
 
-    conversation.messages.push({
+    const message = {
         role,
         text,
         time: Date.now()
-    });
+    };
+
+    if (imageUrl) {
+        message.imageUrl = imageUrl;
+    }
+
+    conversation.messages.push(message);
 
     if (conversation.title === "New chat" && role === "user") {
         conversation.title =
@@ -1789,7 +1853,22 @@ function renderChat() {
         const bubble = document.createElement("div");
         bubble.className =
             "message " + (message.role === "user" ? "user" : "ai");
-        bubble.textContent = message.text;
+        bubble.textContent = message.text || "";
+
+        if (message.imageUrl) {
+            const image = document.createElement("img");
+            image.src = message.imageUrl;
+            image.alt = "Image created or edited by A.M.";
+            image.style.display = "block";
+            image.style.maxWidth = "100%";
+            image.style.maxHeight = "600px";
+            image.style.height = "auto";
+            image.style.borderRadius = "12px";
+            image.style.marginTop = "10px";
+            image.loading = "lazy";
+            bubble.appendChild(image);
+        }
+
         chatMessages.appendChild(bubble);
     });
 
@@ -1977,6 +2056,24 @@ async function sendTextMessage(text) {
 
     if (!currentSession?.user?.id) {
         showAuthScreen("Please sign in to continue.");
+        return;
+    }
+
+    if (pendingImageAction) {
+        const imageAction = pendingImageAction;
+        pendingImageAction = null;
+
+        requestInProgress = true;
+        sendButton.disabled = true;
+        addSavedMessage("user", text);
+        messageInput.value = "";
+
+        try {
+            await requestGeneratedImage(imageAction === "edit", text);
+        } finally {
+            requestInProgress = false;
+            sendButton.disabled = false;
+        }
         return;
     }
 
@@ -2506,6 +2603,250 @@ $("discardVoiceButton").addEventListener("click", () => {
 
 
 // --------------------------------------------------
+// IMAGE GENERATION AND EDITING
+// --------------------------------------------------
+
+const createImageButton = $("createImageButton");
+const editImageButton = $("editImageButton");
+const imageUpload = $("imageUpload");
+const imageResult = $("imageResult");
+const imageTools = $("imageTools");
+const addFilesButton = $("addFilesButton");
+const addPhotoButton = $("addPhotoButton");
+
+addFilesButton.addEventListener("click", () => {
+    const isOpen = imageTools.style.display !== "none";
+    imageTools.style.display = isOpen ? "none" : "flex";
+    addFilesButton.setAttribute("aria-expanded", String(!isOpen));
+});
+
+addPhotoButton.addEventListener("click", () => imageUpload.click());
+
+let selectedEditImage = null;
+
+imageUpload.addEventListener("change", () => {
+    const file = imageUpload.files && imageUpload.files[0];
+
+    if (!file) {
+        selectedEditImage = null;
+        return;
+    }
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!allowedTypes.includes(file.type)) {
+        selectedEditImage = null;
+        imageUpload.value = "";
+        imageResult.textContent = "Please choose a JPG, PNG, or WebP image.";
+        return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+        selectedEditImage = null;
+        imageUpload.value = "";
+        imageResult.textContent = "Please choose an image that is 5 MB or smaller.";
+        return;
+    }
+
+    selectedEditImage = file;
+
+    if (imageEditRequested) {
+        pendingImageAction = "edit";
+        imageEditRequested = false;
+    }
+
+    imageResult.textContent =
+        "Selected: " + file.name +
+        ". Type your editing instructions in Message A.M., then press ↑.";
+    messageInput.focus();
+});
+
+let pendingImageAction = null;
+let imageEditRequested = false;
+
+function closeImageMenu() {
+    imageTools.style.display = "none";
+    addFilesButton.setAttribute("aria-expanded", "false");
+}
+
+createImageButton.addEventListener("click", () => {
+    selectedEditImage = null;
+    imageUpload.value = "";
+    imageEditRequested = false;
+    pendingImageAction = "create";
+    closeImageMenu();
+    imageResult.textContent =
+        "Type your image description in Message A.M., then press ↑.";
+    messageInput.focus();
+});
+
+editImageButton.addEventListener("click", () => {
+    imageEditRequested = true;
+    closeImageMenu();
+
+    if (!selectedEditImage) {
+        imageResult.textContent =
+            "Choose an image to edit. Then type your instructions in Message A.M. and press ↑.";
+        imageUpload.click();
+        return;
+    }
+
+    pendingImageAction = "edit";
+    imageEditRequested = false;
+    imageResult.textContent =
+        "Type your editing instructions in Message A.M., then press ↑.";
+    messageInput.focus();
+});
+
+async function prepareImageForEditing(file) {
+    // Cloudflare FLUX.2 Klein requires each reference image to be smaller
+    // than 512 x 512 pixels. Resize locally before uploading.
+    const bitmap = await createImageBitmap(file);
+    try {
+        const maxDimension = 511;
+        const scale = Math.min(
+            1,
+            maxDimension / bitmap.width,
+            maxDimension / bitmap.height
+        );
+        const width = Math.max(1, Math.round(bitmap.width * scale));
+        const height = Math.max(1, Math.round(bitmap.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext("2d");
+        if (!context) {
+            throw new Error("Your browser could not prepare the image. Please try another image.");
+        }
+
+        context.drawImage(bitmap, 0, 0, width, height);
+
+        const blob = await new Promise((resolve, reject) => {
+            canvas.toBlob(
+                result => result ? resolve(result) : reject(
+                    new Error("Could not prepare the image. Please try another image.")
+                ),
+                "image/jpeg",
+                0.88
+            );
+        });
+
+        return new File([blob], "image-for-edit.jpg", {
+            type: "image/jpeg"
+        });
+    } finally {
+        bitmap.close();
+    }
+}
+
+async function requestGeneratedImage(editMode, promptText) {
+    const prompt = String(promptText || messageInput.value || "").trim();
+
+    if (!prompt) {
+        imageResult.textContent =
+            "Please type an image description in Message A.M.";
+        messageInput.focus();
+        return;
+    }
+
+    if (editMode && !selectedEditImage) {
+        imageResult.textContent = "Choose an image first using ＋, then select Edit image.";
+        return;
+    }
+
+    if (!supabaseClient) {
+        imageResult.textContent =
+            "Sign-in is not configured. Check the Supabase settings on the server.";
+        return;
+    }
+
+    try {
+        createImageButton.disabled = true;
+        editImageButton.disabled = true;
+        imageResult.textContent = editMode
+            ? "A.M. is editing your image. Please wait…"
+            : "A.M. is creating your image. Please wait…";
+
+        const { data: sessionData, error: sessionError } =
+            await supabaseClient.auth.getSession();
+
+        if (sessionError) {
+            throw sessionError;
+        }
+
+        const session = sessionData && sessionData.session;
+
+        if (!session || !session.access_token) {
+            throw new Error("Please sign in before using image generation.");
+        }
+
+        const formData = new FormData();
+        formData.append("prompt", prompt);
+
+        if (editMode && selectedEditImage) {
+            imageResult.textContent = "Preparing your image for editing…";
+            const preparedImage = await prepareImageForEditing(selectedEditImage);
+            formData.append("image", preparedImage, preparedImage.name);
+        }
+
+        imageResult.textContent = editMode
+            ? "A.M. is editing your image. Please wait…"
+            : "A.M. is creating your image. Please wait…";
+
+        const response = await fetch("/generate-image", {
+            method: "POST",
+            headers: {
+                "Authorization": "Bearer " + session.access_token
+            },
+            body: formData
+        });
+
+        let result = {};
+        try {
+            result = await response.json();
+        } catch (_error) {
+            throw new Error("The server returned an invalid response. Please try again.");
+        }
+
+        if (!response.ok) {
+            throw new Error(
+                result.error || "Image generation failed. Please try again."
+            );
+        }
+
+        if (!result.image) {
+            throw new Error("The server did not return an image. Please try again.");
+        }
+
+        const status = document.createElement("p");
+        status.textContent = editMode
+            ? "Your edited image is ready."
+            : "Your generated image is ready.";
+
+        addSavedMessage("ai", status.textContent, result.image);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        if (editMode) {
+            selectedEditImage = null;
+            imageUpload.value = "";
+        }
+    } catch (error) {
+        console.error("Image generation error:", error);
+        imageResult.textContent =
+            error && error.message
+                ? error.message
+                : "Could not generate the image. Please try again.";
+    } finally {
+        createImageButton.disabled = false;
+        editImageButton.disabled = false;
+    }
+}
+
+
+// --------------------------------------------------
+
+
 // SIGN OUT
 // --------------------------------------------------
 
@@ -2655,12 +2996,15 @@ def chat():
 # --------------------------------------------------
 # IMAGE GENERATION AND EDITING — LOGIN REQUIRED
 # --------------------------------------------------
+
 @app.route("/generate-image", methods=["POST"])
 def generate_image():
     user, auth_error = get_authenticated_user()
 
     if auth_error:
-        return jsonify({"error": "Please sign in to use image generation."}), 401
+        return jsonify({
+            "error": "Please sign in to use image generation."
+        }), 401
 
     if not CLOUDFLARE_API_TOKEN or not CLOUDFLARE_ACCOUNT_ID:
         return jsonify({
@@ -2670,7 +3014,9 @@ def generate_image():
     prompt = str(request.form.get("prompt", "")).strip()
 
     if not prompt:
-        return jsonify({"error": "Please describe the image you want."}), 400
+        return jsonify({
+            "error": "Please describe the image you want."
+        }), 400
 
     if len(prompt) > 1800:
         return jsonify({
@@ -2678,6 +3024,7 @@ def generate_image():
         }), 400
 
     upload = request.files.get("image")
+    has_upload = bool(upload and upload.filename)
 
     form_data = {
         "prompt": prompt,
@@ -2690,7 +3037,7 @@ def generate_image():
         for key, value in form_data.items()
     }
 
-    if upload and upload.filename:
+    if has_upload:
         allowed_types = {
             "image/jpeg",
             "image/png",
@@ -2710,7 +3057,28 @@ def generate_image():
             }), 400
 
         if not image_bytes:
-            return jsonify({"error": "The uploaded image is empty."}), 400
+            return jsonify({
+                "error": "The uploaded image is empty."
+            }), 400
+
+        try:
+            with Image.open(io.BytesIO(image_bytes)) as original:
+                original.load()
+                original.thumbnail((512, 512))
+
+                processed = original.convert("RGB")
+                output = io.BytesIO()
+                processed.save(output, format="JPEG", quality=90)
+                image_bytes = output.getvalue()
+
+        except Exception:
+            return jsonify({
+                "error": "This image could not be processed. Please try another JPG, PNG, or WebP image."
+            }), 400
+        if not image_bytes:
+            return jsonify({
+                "error": "The uploaded image is empty."
+            }), 400
 
         files["input_image_0"] = (
             upload.filename,
@@ -2718,12 +3086,34 @@ def generate_image():
             upload.mimetype,
         )
 
-    api_url = (
-        "https://api.cloudflare.com/client/v4/accounts/"
-        f"{CLOUDFLARE_ACCOUNT_ID}/ai/run/{CLOUDFLARE_IMAGE_MODEL}"
-    )
+    # Reserve one slot only after validating the request.
+    try:
+        reserved, count, usage_date = reserve_image_slot()
+    except sqlite3.Error:
+        app.logger.exception("Could not check daily image usage.")
+        return jsonify({
+            "error": "Unable to check the daily image limit. Please try again."
+        }), 500
+
+    if not reserved:
+        return jsonify({
+            "error": (
+                f"Daily image limit reached ({DAILY_IMAGE_LIMIT}). "
+                "Try again after the daily reset at 00:00 UTC "
+                "(5:30 AM India time)."
+            ),
+            "daily_images_used": count,
+            "daily_image_limit": DAILY_IMAGE_LIMIT,
+        }), 429
+
+    success = False
 
     try:
+        api_url = (
+            "https://api.cloudflare.com/client/v4/accounts/"
+            f"{CLOUDFLARE_ACCOUNT_ID}/ai/run/{CLOUDFLARE_IMAGE_MODEL}"
+        )
+
         response = requests.post(
             api_url,
             headers={
@@ -2739,14 +3129,31 @@ def generate_image():
             result_data = {}
 
         if not response.ok:
+            errors = result_data.get("errors", [])
+            error_codes = {
+                str(item.get("code", ""))
+                for item in errors
+                if isinstance(item, dict)
+            }
+
             app.logger.warning(
-                "Cloudflare image request failed with HTTP %s.",
+                "Cloudflare image request failed with HTTP %s; details: %s",
                 response.status_code,
+                str(errors)[:1000],
             )
-            return jsonify({
-                "error": "Cloudflare could not generate the image. "
-                         "Please try again later."
-            }), 502
+
+            if "3030" in error_codes:
+                error_message = (
+                    "Cloudflare's safety filter rejected this image request. "
+                    "Try a different image or a simpler prompt."
+                )
+            else:
+                error_message = (
+                    "Cloudflare could not generate the image. "
+                    "Please try again later."
+                )
+
+            return jsonify({"error": error_message}), 502
 
         image_base64 = result_data.get("result", {}).get("image")
 
@@ -2756,9 +3163,13 @@ def generate_image():
                 "error": "No image was returned. Please try again."
             }), 502
 
+        success = True
+
         return jsonify({
             "image": "data:image/jpeg;base64," + image_base64,
-            "mode": "edit" if upload and upload.filename else "generate",
+            "mode": "edit" if has_upload else "generate",
+            "daily_images_used": count,
+            "daily_image_limit": DAILY_IMAGE_LIMIT,
         })
 
     except requests.Timeout:
@@ -2771,6 +3182,19 @@ def generate_image():
         return jsonify({
             "error": "Unable to contact the image service right now."
         }), 502
+
+    except Exception:
+        app.logger.exception("Unexpected image generation error.")
+        return jsonify({
+            "error": "An unexpected error occurred during image generation."
+        }), 500
+
+    finally:
+        if not success:
+            try:
+                release_image_slot(usage_date)
+            except sqlite3.Error:
+                app.logger.exception("Could not release reserved image slot.")
 
 # --------------------------------------------------
 # HEALTH CHECK
