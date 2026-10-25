@@ -10,6 +10,16 @@ from PIL import Image
 
 from core.settings import MODEL
 app = Flask(__name__)
+@app.route("/robots.txt")
+def robots_txt():
+    from flask import Response
+
+    content = """User-agent: *
+Allow: /
+
+Sitemap: https://future-aabel.onrender.com/sitemap.xml
+"""
+    return Response(content, mimetype="text/plain")
 @app.route("/sitemap.xml")
 def sitemap():
     from flask import Response
